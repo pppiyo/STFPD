@@ -1,0 +1,599 @@
+unit FrmHRSys;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms, 
+  Dialogs, StdCtrls, ExtCtrls, RzSpnEdt, Grids, RzGrids,
+  ClassHRSys, ClassHRSysWithDA, Data, Vprocess, RzPanel, math, BasicStructures;
+
+type
+  TFrameHRSys = class(TFrame)
+    RzToolbar1: TRzToolbar;
+    BtnClearV: TButton;
+    BtnDefault: TButton;
+    BtnCalculate: TButton;
+    BtnDraw: TButton;
+    BtnSave: TButton;
+    BtnLoadSaved: TButton;
+    Panel1: TPanel;
+    Panel2: TPanel;
+    GBoxBleed: TGroupBox;
+    SpinnerZHR: TRzSpinner;
+    PanelSteamExtraction: TPanel;
+    GBoxDA: TGroupBox;
+    CBoxHasDA: TComboBox;
+    LEditPeDA: TLabeledEdit;
+    GBoxHRSysInput: TGroupBox;
+    StrGridHRSysInput: TRzStringGrid;
+    GBoxHRSysOutput: TGroupBox;
+    StrGridHRSysOutput: TRzStringGrid;
+    Image1: TImage;
+    procedure AfterConstruction; override;
+    procedure BtnCalculateClick(Sender: TObject);
+    procedure BtnClearVClick(Sender: TObject);
+    procedure BtnDefaultClick(Sender: TObject);
+    procedure BtnDrawClick(Sender: TObject);
+    procedure BtnSaveClick(Sender: TObject);
+    procedure BtnLoadSavedClick(Sender: TObject);
+    procedure SpinnerZHRChange(Sender: TObject);
+
+  private
+    {Visual}
+    procedure DrawDynGrid(ZHR:integer);
+    {Data}
+    procedure Ini;
+    procedure Calculate;
+    {Data & Visual}
+    procedure D2V(param: THRSys);
+    procedure V2D(param: THRSys);
+    procedure SaveToFile(param: THRSys; const FileName: TFileName);overload;
+    procedure SaveToFile(param: THRSysWithDA; const FileName: TFileName);overload;
+    function  LoadSavedHRSysWithDA( const FileName: TFileName): THRSysWithDA;
+    function  LoadSavedHRSys( const FileName: TFileName): THRSys;
+  public
+    { Public declarations }
+  end;
+
+implementation
+
+uses MainNyHRnR, MainGraphNR;
+
+{$R *.dfm}
+
+procedure TframeHRSys.AfterConstruction;
+begin
+  inherited;
+  BtnDraw.Enabled := False;
+  {data}
+	Ini;
+  {data & visual}
+  DrawDynGrid(SpinnerZHR.Value);
+  if CBoxHasDA.ItemIndex = 1 then begin
+    D2V(aHRSys);
+  end else begin
+    D2V(aHRSysWithDA);
+  end;
+end;
+
+procedure TframeHRSys.Ini;
+begin
+  if aGoverningStage.tag = 1 then begin
+  	if CBoxHasDA.ItemIndex = 0 then begin
+		  if aHRSysWithDA = nil then begin
+  	    aHRSysWithDA := THRSysWithDA.Create(SpinnerZHR.Value, StrToFloat(LEditPeDA.Text), aIniData, aGoverningStage);
+  	  end else begin
+  		  FreeAndNil(aHRSysWithDA);
+  	    aHRSysWithDA := THRSysWithDA.Create(SpinnerZHR.Value, StrToFloat(LEditPeDA.Text), aIniData, aGoverningStage);
+  	  end;
+  	end else if CBoxHasDA.ItemIndex = 1 then begin
+		  if aHRSys = nil then begin
+  	    aHRSys := THRSys.Create(SpinnerZHR.Value, aIniData, aGoverningStage);
+  	  end else begin
+  		  FreeAndNil(aHRSys);
+  	    aHRSys := THRSys.Create(SpinnerZHR.Value, aIniData, aGoverningStage);
+  	  end;
+  	end;  
+  end else begin
+    Showmessage('Last step not finished yet!');
+  end;
+end;
+
+procedure TframeHRSys.DrawDynGrid(ZHR:integer);
+var
+	i : integer;
+const
+  ItemTitles : array[0..6] of string = ('IsSurface','ηh','δt','Δpe/pe','ΔHwater','Change','HasDlaIn');
+  ItemUnits  : array[0..6] of string = ('--','%','℃','%','kJ/kg','%','Boolean');
+
+  ItemTitles2 : array[0..6] of string = ('pe','te','he','HasDrainIn','Dfw','Dcw','ΔDe');
+  ItemUnits2  : array[0..6] of string = ('MPa','℃','kJ/kg','Boolean','kg/h','kg/h','kg/h');
+begin
+  //Shape the Grid
+  with StrGridHRSysInput do begin
+  	FixedCols := 1;
+    FixedRows := 1;
+    RowCount  := 8;
+    ColCount  := 2+ZHR;
+    Width := (ColCount +1)*DefaultColWidth;
+    Height := (RowCount+1)*DefaultRowHeight;
+    Options := Options + [goEditing];
+  	for i := 0 to RowCount-1 do begin
+        Cells[0,i+1] := ItemTitles[i];
+        Cells[1,i+1] := ItemUnits[i];
+    end;
+    Cells[1,0] := 'HR'+IntToStr(Self.Tag);
+    Cells[1,0] := 'unit';
+    for i := 2 to ColCount-1 do begin
+      Cells[i,0] := 'HR '+ IntToStr(i-1);
+    end;
+  end;
+
+  with StrGridHRSysOutput do begin
+  	FixedCols := 1;
+    FixedRows := 1;
+    RowCount  := 8;
+    ColCount  := 2+ZHR;
+    Width := (ColCount +1)*DefaultColWidth;
+    Height := (RowCount+1)*DefaultRowHeight;
+    Options := Options + [goEditing];
+  	for i := 0 to RowCount-1 do begin
+        Cells[0,i+1] := ItemTitles2[i];
+        Cells[1,i+1] := ItemUnits2[i];
+    end;
+    Cells[1,0] := 'HR'+IntToStr(Self.Tag);
+    Cells[1,0] := 'unit';
+    for i := 2 to ColCount-1 do begin
+      Cells[i,0] := 'HR '+ IntToStr(i-1);
+    end;
+  end;
+end;
+
+procedure TframeHRSys.Calculate;
+begin
+	if CBoxHasDA.ItemIndex = 1 then begin
+  	aHRSys.GetarrHROutput;{data procedures}
+  end else begin
+  	aHRSysWithDA.GetarrHROutput;{data procedures}
+  end;
+end;
+
+{Data & Visual}
+procedure TframeHRSys.D2V(param: THRSys);
+var
+	i,j : integer;
+begin
+	if (param is THRSysWithDA) then begin
+		with StrGridHRSysInput do begin
+			for i := 0 to (THRSysWithDA(param).ZHR-1) do begin
+  	  	Cells[i+2,1] := Booleantostr(THRSysWithDA(param).arrHRInput[i].IsSurface);//HRSys.;//IniData
+  	  	Cells[i+2,2] := Floattostr(THRSysWithDA(param).arrHRInput[i].yitah);//HRSys.;//IniData
+  	    Cells[i+2,3] := Floattostr(THRSysWithDA(param).arrHRInput[i].Deltalt);
+  	    Cells[i+2,4] := Floattostr(THRSysWithDA(param).arrHRInput[i].DeltaPeOverPe);
+  	    Cells[i+2,5] := Floattostr(THRSysWithDA(param).arrHRInput[i].DeltaHWater);
+  	    Cells[i+2,6] := Floattostr(THRSysWithDA(param).arrHRInput[i].Change);
+  	    Cells[i+2,7] := Booleantostr(THRSysWithDA(param).arrHRInput[i].HasDlaIn);
+  	  end;
+  	end;
+		with StrGridHRSysOutput do begin
+      for i := 0 to (THRSysWithDA(param).ZHR-1) do begin
+        if THRSysWithDA(param).arrHROutput[0].PTDPointOutletWater <> nil then begin
+  	  	  Cells[i+2,1] := Floattostr(THRSysWithDA(param).arrHROutput[i].PTDPointExtraction.P);//HRSys.;//IniData
+  	  	  Cells[i+2,2] := Floattostr(THRSysWithDA(param).arrHROutput[i].PTDPointExtraction.T);//HRSys.;//IniData
+  	      Cells[i+2,3] := Floattostr(THRSysWithDA(param).arrHROutput[i].PTDPointExtraction.H);
+  	      Cells[i+2,4] := Booleantostr(THRSysWithDA(param).arrHROutput[i].HasDrainIn);
+  	      Cells[i+2,5] := Floattostr(THRSysWithDA(param).arrHROutput[i].Dfw);
+  	      Cells[i+2,6] := Floattostr(THRSysWithDA(param).arrHROutput[i].Dcw);
+  	      Cells[i+2,7] := Floattostr(THRSysWithDA(param).arrHROutput[i].DeltaDe);
+  	    end;
+      end;
+  	end;
+  	SpinnerZHR.Value := THRSysWithDA(param).ZHR;
+
+  end else if not(param is THRSysWithDA) then begin
+		with StrGridHRSysInput do begin
+			for i := 0 to (param.ZHR-1) do begin
+  	  	Cells[i+2,1] := Booleantostr(param.arrHRInput[i].IsSurface);//HRSys.;//IniData
+  	  	Cells[i+2,2] := Floattostr(param.arrHRInput[i].yitah);//HRSys.;//IniData
+  	    Cells[i+2,3] := Floattostr(param.arrHRInput[i].Deltalt);
+  	    Cells[i+2,4] := Floattostr(param.arrHRInput[i].DeltaPeOverPe);
+  	    Cells[i+2,5] := Floattostr(param.arrHRInput[i].DeltaHWater);
+  	    Cells[i+2,6] := Floattostr(param.arrHRInput[i].Change);
+  	    Cells[i+2,7] := Booleantostr(param.arrHRInput[i].HasDlaIn);
+  	  end;
+  	end;
+		with StrGridHRSysOutput do begin
+			for i := 0 to (param.ZHR-1) do begin
+  	  	Cells[i+2,1] := Floattostr(param.arrHROutput[i].PTDPointExtraction.P);//HRSys.;//IniData
+  	  	Cells[i+2,2] := Floattostr(param.arrHROutput[i].PTDPointExtraction.T);//HRSys.;//IniData
+  	    Cells[i+2,3] := Floattostr(param.arrHROutput[i].PTDPointExtraction.H);
+  	    Cells[i+2,4] := Booleantostr(param.arrHROutput[i].HasDrainIn);
+  	    Cells[i+2,5] := Floattostr(param.arrHROutput[i].Dfw);
+  	    Cells[i+2,6] := Floattostr(param.arrHROutput[i].Dcw);
+  	    Cells[i+2,7] := Floattostr(param.arrHROutput[i].DeltaDe);
+  	  end;
+  	end;  	
+  	SpinnerZHR.Value := param.ZHR;
+  end; 
+end;
+
+procedure TframeHRSys.V2D(param: THRSys);
+var
+	i,j, flag : integer;
+begin
+	if (param is THRSysWithDA) then begin
+  	THRSysWithDA(param).PeDA := StrToFloat(LEditPeDA.Text);
+    THRSysWithDA(param).ZHR  := SpinnerZHR.Value;   
+		for i := 0 to (THRSysWithDA(param).ZHR-1) do begin
+			THRSysWithDA(param).arrHRInput[i].IsSurface			:= StrToBoolean(StrGridHRSysInput.Cells[i+2,1] 	);
+  		THRSysWithDA(param).arrHRInput[i].yitah    			:= StrToFloat(	StrGridHRSysInput.Cells[i+2,2] 	);
+  		THRSysWithDA(param).arrHRInput[i].Deltalt  			:= StrToFloat(  StrGridHRSysInput.Cells[i+2,3]  );
+  		THRSysWithDA(param).arrHRInput[i].DeltaPeOverPe	:= StrToFloat(  StrGridHRSysInput.Cells[i+2,4]  );
+  		THRSysWithDA(param).arrHRInput[i].DeltaHWater		:= StrToFloat(  StrGridHRSysInput.Cells[i+2,5]  );
+  		THRSysWithDA(param).arrHRInput[i].Change   			:= StrToInt(    StrGridHRSysInput.Cells[i+2,6]  );
+  		THRSysWithDA(param).arrHRInput[i].HasDlaIn 			:= StrToBoolean(StrGridHRSysInput.Cells[i+2,7] 	);
+    end;
+    THRSysWithDA(param).ZHR := SpinnerZHR.Value;
+  end;   
+  //动态生成除氧器回热器位置
+  flag := 0;
+  if (param is THRSysWithDA) then begin//是带有除氧器的系统则录入用户设置
+  	for i := 0 to (THRSysWithDA(param).ZHR-1) do begin
+  		if THRSysWithDA(param).arrHRInput[i].IsSurface = False then begin
+        flag := 1;
+    		(param as THRSysWithDA).DAPosition:= i;
+    	end;
+  	end;
+    if flag = 0 then begin//遍历后没有发现除氧器
+    	Showmessage('This system must have at least one deaerator!');
+      (param as THRSysWithDA).DAPosition := (Ceil(THRSysWithDA(param).ZHR / 2)-1);//自动在数据层进行纠正
+      Showmessage('已将除氧器位置自动设置为'+InttoStr((param as THRSysWithDA).DAPosition));
+    end;
+  end else begin
+  	for i := 0 to (param.ZHR-1) do begin
+  		if param.arrHRInput[i].IsSurface = False then begin
+      	Showmessage('This system must have no deaerator!');
+    		param.arrHRInput[i].IsSurface  := True;//在数据层进行纠正
+    	end;
+  	end;
+  end;
+  //动态生成回收轴封漏气的位置
+  flag := 0;
+  if (param is THRSysWithDA) then begin
+    for i := 0 to (THRSysWithDA(param).ZHR-1) do begin
+  	  if THRSysWithDA(param).arrHRInput[i].HasDlaIn = True then begin
+        flag := 1;
+    	  THRSysWithDA(param).DlaPosition := i;
+      end;
+    end;
+    if flag = 0 then begin
+      AddMessage('Dla reclaim happens in the condenser', 'MessageBox.txt');
+    end;
+  end else begin
+    for i := 0 to (THRSys(param).ZHR-1) do begin
+  	  if THRSys(param).arrHRInput[i].HasDlaIn = True then begin
+        flag := 1;
+    	  THRSys(param).DlaPosition := i;
+      end;
+    end;
+    if flag = 0 then begin
+      ShowMessage('Dla reclaim happens in the condenser');
+    end;
+  end;
+//  param.CheckDataValidity;//数据层检查合理性
+end;
+
+procedure TFrameHRSys.BtnCalculateClick(Sender: TObject);
+begin
+  if aHRSys <> nil then begin
+	  V2D(aHRSys);
+    Calculate;
+    D2V(aHRSys);
+  end else begin
+    V2D(aHRSysWithDA);
+    Calculate;
+    D2V(aHRSysWithDA);
+  end; 
+  BtnDraw.enabled   := True;
+end;
+
+procedure TFrameHRSys.BtnClearVClick(Sender: TObject);
+begin
+  SpinnerZHR.Value := 1;
+	ClearAll(Self);
+  BtnCalculate.Enabled := False;
+end;
+
+procedure TFrameHRSys.BtnDefaultClick(Sender: TObject);
+begin
+  {data & visual}
+  DrawDynGrid(SpinnerZHR.Value);
+  if aHRSys <> nil then begin
+    D2V(aHRSys);
+  end else if aHRSysWithDA <> nil then begin
+    D2V(aHRSysWithDA);
+  end;
+  BtnDraw.Enabled := True;
+  BtnSave.Enabled := True;
+  BtnCalculate.Enabled := True;
+end;
+
+procedure TFrameHRSys.BtnDrawClick(Sender: TObject);
+begin
+  if aHRSys <> nil then begin
+    FormMainGraphNR.DrawHRSysOut(aHRSys);
+  end else if aHRSysWithDA <> nil then begin
+    FormMainGraphNR.DrawHRSysOut(aHRSysWithDA);
+  end;
+  FormMainGraphNR.Show;
+end;
+
+procedure TFrameHRSys.BtnSaveClick(Sender: TObject);
+begin
+	if aHRSys <> nil then begin
+		SaveToFile(aHRSys,'HRSys.txt')
+  end else if aHRSysWithDA <> nil then begin
+		SaveToFile(aHRSysWithDA,'HRSysWithDA.txt');
+  end else begin
+    Ini;
+    if aHRSys <> nil then
+		  SaveToFile(aHRSys,'HRSys.txt')
+    else if aHRSysWithDA <> nil then begin
+		  SaveToFile(aHRSysWithDA,'HRSysWithDA.txt');
+    end;
+  end;
+end;
+
+procedure TFrameHRSys.SpinnerZHRChange(Sender: TObject);
+begin
+	Ini;
+  {data & visual}
+  DrawDynGrid(SpinnerZHR.Value);
+  if aHRSys <> nil then begin
+    D2V(aHRSys);
+  end else if aHRSysWithDA <> nil then begin
+    D2V(aHRSysWithDA);
+  end;
+end;
+
+procedure TFrameHRSys.SaveToFile(param: THRSys; const FileName: TFileName);
+var
+  i : integer;
+ 	f: TextFile;
+begin
+ 	AssignFile(f, FileName);
+ 	Rewrite(f);
+  Writeln(f, '[ZHR]');
+  Writeln(f, param.ZHR);
+  Writeln(f, '[IsSurface]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, param.arrHRInput[i].IsSurface);
+  end;
+  Writeln(f, '[yitah]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, param.arrHRInput[i].Yitah );
+  end;
+  Writeln(f, '[Deltalt]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, param.arrHRInput[i].Deltalt );
+  end;
+  Writeln(f, '[DeltaPeOverPe]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, param.arrHRInput[i].DeltaPeOverPe );
+  end;
+	Writeln(f, '[DeltaHWater]');
+  for i := 0 to (param.ZHR -1) do begin
+	  Writeln(f, param.arrHRInput[i].DeltaHWater );
+  end;
+	Writeln(f, '[Change]');
+  for i := 0 to (param.ZHR -1) do begin
+	  Writeln(f, param.arrHRInput[i].Change);
+  end;
+	Writeln(f, '[HasDlaIn]');
+  for i := 0 to (param.ZHR -1) do begin
+	  Writeln(f, param.arrHRInput[i].HasDlaIn );
+  end;
+	CloseFile(f);
+end;
+
+procedure TFrameHRSys.SaveToFile(param: THRSysWithDA; const FileName: TFileName);
+var
+  i : integer;
+ 	f: TextFile;
+begin
+ 	AssignFile(f, FileName);
+ 	Rewrite(f);
+  Writeln(f, '[ZHR]');
+  Writeln(f, param.ZHR);
+  Writeln(f, '[PeDA]');
+  Writeln(f, param.PeDA);
+  Writeln(f, '[IsSurface]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, THRSysWithDA(param).arrHRInput[i].IsSurface);
+  end;
+  Writeln(f, '[yitah]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, THRSysWithDA(param).arrHRInput[i].Yitah );
+  end;
+  Writeln(f, '[Deltalt]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, THRSysWithDA(param).arrHRInput[i].Deltalt );
+  end;
+  Writeln(f, '[DeltaPeOverPe]');
+  for i := 0 to (param.ZHR -1) do begin
+    Writeln(f, THRSysWithDA(param).arrHRInput[i].DeltaPeOverPe );
+  end;
+	Writeln(f, '[DeltaHWater]');
+  for i := 0 to (param.ZHR -1) do begin
+	  Writeln(f, THRSysWithDA(param).arrHRInput[i].DeltaHWater );
+  end;
+	Writeln(f, '[Change]');
+  for i := 0 to (param.ZHR -1) do begin
+	  Writeln(f, THRSysWithDA(param).arrHRInput[i].Change);
+  end;
+	Writeln(f, '[HasDlaIn]');
+  for i := 0 to (param.ZHR -1) do begin
+	  Writeln(f, THRSysWithDA(param).arrHRInput[i].HasDlaIn );
+  end;
+	CloseFile(f);
+end;
+
+function TFrameHRSys.LoadSavedHRSysWithDA( const FileName: TFileName): THRSysWithDA ;
+var
+ f: TextFile;  strTmp: String;
+ Dtmp : double; itmp : integer;tmpZHR: integer; tmpPeDA:double;
+ i : integer;
+begin
+ 	AssignFile(f, FileName);
+ 	Reset(f);
+	While not eof(f) do begin
+  	Readln(f, strTmp);
+    if LowerCase(StrTmp) = LowerCase('[ZHR]') then begin
+      Readln(f, itmp);
+      tmpZHR := itmp;
+    	Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[PeDA]') then begin
+    	Readln(f, Dtmp);
+      tmpPeDA := Dtmp;
+      Continue;
+    end;
+    Result := THRSysWithDA.Create(tmpZHR, tmpPeDA, aIniData, aGoverningStage);
+    if LowerCase(StrTmp) = LowerCase('[IsSurface]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Strtmp);
+        Result.arrHRInput[i].IsSurface := StrToBoolean(strtmp);
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[yitah]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].yitah := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[Deltalt]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].Deltalt := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[DeltaPeOverPe]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].DeltaPeOverPe := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[DeltaHWater]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].DeltaHWater := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[Change]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].Change := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[HasDlaIn]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, strtmp);
+        Result.arrHRInput[i].HasDlaIn := StrToBoolean(strtmp);
+      end;
+      Continue;
+    end;
+  end;
+  CloseFile(f);
+end;
+
+function TFrameHRSys.LoadSavedHRSys( const FileName: TFileName): THRSys ;
+var
+ f: TextFile;  strTmp: String;
+ Dtmp : double; itmp : integer;tmpZHR: integer;
+ i : integer;
+begin
+ 	AssignFile(f, FileName);
+ 	Reset(f);
+	While not eof(f) do begin
+  	Readln(f, strTmp);
+    if LowerCase(StrTmp) = LowerCase('[ZHR]') then begin
+      Readln(f, itmp);
+      tmpZHR := itmp;
+    	Continue;
+    end;
+    Result := THRSys.Create(tmpZHR, aIniData, aGoverningStage);
+    if LowerCase(StrTmp) = LowerCase('[IsSurface]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Strtmp);
+        Result.arrHRInput[i].IsSurface := StrToBoolean(strtmp);
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[yitah]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].yitah := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[Deltalt]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].Deltalt := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[DeltaPeOverPe]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].DeltaPeOverPe := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[DeltaHWater]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].DeltaHWater := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[Change]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, Dtmp);
+        Result.arrHRInput[i].Change := Dtmp;
+      end;
+      Continue;
+    end;
+    if LowerCase(StrTmp) = LowerCase('[HasDlaIn]') then begin
+      for i := 0 to (result.ZHR-1) do begin
+    	  Readln(f, strtmp);
+        Result.arrHRInput[i].HasDlaIn := StrToBoolean(strtmp);
+      end;
+      Continue;
+    end; 
+  end;
+  CloseFile(f);
+end;
+
+procedure TFrameHRSys.BtnLoadSavedClick(Sender: TObject);
+begin
+  	if (CBoxHasDA.ItemIndex = 0) then begin
+      if FileExists('HRSysWithDA.txt') then begin
+		    aHRSysWithDA := LoadSavedHRSysWithDA('HRSysWithDA.txt');
+  	    D2V(aHRSysWithDA);
+      end else Showmessage('File Not Found, please save first!');
+  	end else if (CBoxHasDA.ItemIndex = 1) then begin
+      if FileExists('HRSys.txt') then begin
+		    aHRSys := LoadSavedHRSys( 'HRSys.txt');
+  	    D2V(aHRSys);
+      end else Showmessage('File Not Found, please save first!');
+  	end;
+end;
+
+end.
