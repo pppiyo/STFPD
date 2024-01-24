@@ -3,6 +3,8 @@
 ## About
 User-friendly software specialized in steam turbine system scheme design
 
+## [Showcase Video](https://www.youtube.com/watch?v=O88_ELuy9QU)
+
 ## Motivation
 The design of a steam turbine's thermal system was complicated in its iterative and high-dimensional nature and involves hundreds if not thousands of parameters. 
 In hope of making things easier for designers, I came up with this user friendly design software that can generate a solution with just a few clicks.
