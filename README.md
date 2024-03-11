@@ -1,7 +1,7 @@
 # Steam Turbine Flow Path Design Software (STFPD)
 
 ## About
-User-friendly software specialized in steam turbine system scheme design
+User-friendly software specialized in steam turbine system scheme design.
 
 ## Showcase Video
 Check out the design process of a thermal system using this software through [this video](https://www.youtube.com/watch?v=O88_ELuy9QU).
